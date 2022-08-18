@@ -1,0 +1,13 @@
+[package]
+name = "blockchain"
+version = "0.1.0"
+edition = "2021"
+authors = ["SummerSnake"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+sha2 = "0.10.2"
+rust-crypto = "0.2.36"
+bincode = "1.3.3"
+failure = "0.1.8"
