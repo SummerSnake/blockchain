@@ -1,19 +1,19 @@
 mod block;
 mod blockchain;
+mod cli;
 
 pub type Result<T> = std::result::Result<T, failure::Error>;
 
-use blockchain::*;
-use std::thread::sleep;
-use std::time::Duration;
+use cli::Cli;
+use env_logger::Env;
 
 fn main() -> Result<()> {
-    let mut bc = Blockchain::new();
-    sleep(Duration::from_millis(10));
-    bc.add_block(String::from("Send 1 BTC to SummerSnake"))?;
-    sleep(Duration::from_millis(30));
-    bc.add_block(String::from("Send 2 more BTC to SummerSnake"))?;
+    env_logger::Builder::from_env(Env::default().default_filter_or("warning...")).init();
 
-    println!("Blockchain: {:#?}", bc);
+    let mut cli = Cli::new()?;
+    if let Err(e) = cli.run() {
+        println!("Error: {}", e);
+    };
+
     Ok(())
 }

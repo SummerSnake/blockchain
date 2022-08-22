@@ -1,17 +1,19 @@
 use super::*;
 use bincode::serialize;
 use crypto::{digest::Digest, sha2::Sha256};
+use log::info;
+use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
 const TARGET_HEXS: usize = 4;
 
-#[derive(Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Block {
     timestamp: u128,
     data: String,
     prev_block_hash: String,
     hash: String,
-    nonce: i32, // 区块nonce, 为了防⽌交易重播，ETH节点要求每笔交易必须有⼀个nonce数值
+    nonce: i32,
 }
 
 impl Block {
@@ -43,9 +45,18 @@ impl Block {
     }
 
     /**
+     * @desc 获取前一个区块 hash
+     */
+    pub fn get_prev_hash(&self) -> String {
+        self.prev_block_hash.clone()
+    }
+
+    /**
      * @desc 执行算法
      */
     fn run_proof_of_work(&mut self) -> Result<()> {
+        info!("Mining the block containing \"{}\"\n", self.data);
+
         while !self.validate()? {
             self.nonce += 1;
         }
