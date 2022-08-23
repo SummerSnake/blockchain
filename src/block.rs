@@ -1,4 +1,5 @@
 use super::*;
+use crate::transction::Transction;
 use bincode::serialize;
 use crypto::{digest::Digest, sha2::Sha256};
 use log::info;
@@ -10,7 +11,7 @@ const TARGET_HEXS: usize = 4;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Block {
     timestamp: u128,
-    data: String,
+    transactions: Vec<Transction>,
     prev_block_hash: String,
     hash: String,
     nonce: i32,
@@ -20,14 +21,14 @@ impl Block {
     /**
      * @desc 新建区块
      */
-    pub fn new(data: String, prev_block_hash: String) -> Result<Block> {
+    pub fn new(transactions: Vec<Transction>, prev_block_hash: String) -> Result<Block> {
         let timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)?
             .as_millis();
 
         let mut block = Block {
             timestamp,
-            data,
+            transactions,
             prev_block_hash,
             hash: String::new(),
             nonce: 0,
@@ -52,10 +53,17 @@ impl Block {
     }
 
     /**
+     * @desc 获取交易记录
+     */
+    pub fn get_transaction(&self) -> &Vec<Transction> {
+        &self.transactions
+    }
+
+    /**
      * @desc 执行算法
      */
     fn run_proof_of_work(&mut self) -> Result<()> {
-        info!("Mining the block containing \"{}\"\n", self.data);
+        info!("Mining the block containing \"{:#?}\"\n", self.transactions);
 
         while !self.validate()? {
             self.nonce += 1;
@@ -88,7 +96,7 @@ impl Block {
     fn prepare_hash_data(&self) -> Result<Vec<u8>> {
         let content = (
             self.prev_block_hash.clone(),
-            self.data.clone(),
+            self.transactions.clone(),
             self.timestamp,
             TARGET_HEXS,
             self.nonce,
