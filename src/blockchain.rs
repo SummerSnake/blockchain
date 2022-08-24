@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
 use super::*;
 use crate::block::*;
 use crate::transction::*;
 use bincode::{deserialize, serialize};
 use log::{debug, info};
 use sled;
+use std::collections::HashMap;
 
 const GENESIS_COINBASE_DATA: &str = "The Rust is so hard, Wuuu~~";
 
@@ -30,7 +29,7 @@ impl Blockchain {
         let db = sled::open("data/blocks")?;
         let hash = db
             .get("LAST")?
-            .expect("Must create a new block database first");
+            .expect("Must create a new block database first.");
 
         info!("Found block database.");
 
@@ -62,7 +61,7 @@ impl Blockchain {
             db,
         };
 
-        bc.db.flush();
+        bc.db.flush()?;
         Ok(bc)
     }
 
@@ -88,11 +87,11 @@ impl Blockchain {
         }
     }
 
-    pub fn find_UTXO(&self, address: &str) -> Vec<TXOutput> {
+    pub fn find_utxo(&self, address: &str) -> Vec<TXOutput> {
         let mut utxos = Vec::<TXOutput>::new();
-        let unspend_TXs = self.find_unspend_transactions(address);
+        let unspend_txs = self.find_unspend_transactions(address);
 
-        for tx in unspend_TXs {
+        for tx in unspend_txs {
             for out in &tx.vout {
                 if out.can_be_unlock_with(&address) {
                     utxos.push(out.clone());
@@ -110,9 +109,9 @@ impl Blockchain {
     ) -> (i32, HashMap<String, Vec<i32>>) {
         let mut unspent_outputs: HashMap<String, Vec<i32>> = HashMap::new();
         let mut accumulated = 0;
-        let unspend_TXs = self.find_unspend_transactions(address);
+        let unspend_txs = self.find_unspend_transactions(address);
 
-        for tx in unspend_TXs {
+        for tx in unspend_txs {
             for index in 0..tx.vout.len() {
                 if tx.vout[index].can_be_unlock_with(address) && accumulated < amount {
                     match unspent_outputs.get_mut(&tx.id) {
@@ -135,32 +134,32 @@ impl Blockchain {
     }
 
     fn find_unspend_transactions(&self, address: &str) -> Vec<Transction> {
-        let mut spent_TXOs: HashMap<String, Vec<i32>> = HashMap::new();
-        let mut unspend_TXs: Vec<Transction> = Vec::new();
+        let mut spent_txos: HashMap<String, Vec<i32>> = HashMap::new();
+        let mut unspend_txs: Vec<Transction> = Vec::new();
 
         for block in self.iter() {
             for tx in block.get_transaction() {
                 for index in 0..tx.vout.len() {
-                    if let Some(ids) = spent_TXOs.get(&tx.id) {
+                    if let Some(ids) = spent_txos.get(&tx.id) {
                         if ids.contains(&(index as i32)) {
                             continue;
                         }
                     }
 
                     if tx.vout[index].can_be_unlock_with(address) {
-                        unspend_TXs.push(tx.to_owned())
+                        unspend_txs.push(tx.to_owned())
                     }
                 }
 
                 if !tx.is_coinbase() {
                     for i in &tx.vin {
                         if i.can_unlock_output_with(address) {
-                            match spent_TXOs.get_mut(&i.txid) {
+                            match spent_txos.get_mut(&i.txid) {
                                 Some(v) => {
                                     v.push(i.vout);
                                 }
                                 None => {
-                                    spent_TXOs.insert(i.txid.clone(), vec![i.vout]);
+                                    spent_txos.insert(i.txid.clone(), vec![i.vout]);
                                 }
                             }
                         }
@@ -169,7 +168,7 @@ impl Blockchain {
             }
         }
 
-        unspend_TXs
+        unspend_txs
     }
 }
 

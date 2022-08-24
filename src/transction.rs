@@ -45,7 +45,7 @@ pub struct Transction {
 
 impl Transction {
     // 生成一笔新的交易
-    pub fn new_UTXO(from: &str, to: &str, amount: i32, bc: &Blockchain) -> Result<Transction> {
+    pub fn new_utxo(from: &str, to: &str, amount: i32, bc: &Blockchain) -> Result<Transction> {
         info!("New UTXO Transaction from: {} to: {}.", from, to);
 
         let mut vin = Vec::new();
