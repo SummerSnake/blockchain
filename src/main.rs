@@ -2,6 +2,7 @@ mod block;
 mod blockchain;
 mod cli;
 mod transction;
+mod wallets;
 
 pub type Result<T> = std::result::Result<T, failure::Error>;
 

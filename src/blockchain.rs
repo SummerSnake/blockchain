@@ -1,10 +1,11 @@
-use super::*;
+use std::collections::HashMap;
+
+use super::Result;
 use crate::block::*;
 use crate::transction::*;
 use bincode::{deserialize, serialize};
 use log::{debug, info};
 use sled;
-use std::collections::HashMap;
 
 const GENESIS_COINBASE_DATA: &str = "The Rust is so hard, Wuuu~~";
 
@@ -104,12 +105,12 @@ impl Blockchain {
 
     pub fn find_spendable_outputs(
         &self,
-        address: &str,
+        pub_key_hash: &[u8],
         amount: i32,
     ) -> (i32, HashMap<String, Vec<i32>>) {
         let mut unspent_outputs: HashMap<String, Vec<i32>> = HashMap::new();
         let mut accumulated = 0;
-        let unspend_txs = self.find_unspend_transactions(address);
+        let unspend_txs = self.find_unspend_transactions(pub_key_hash);
 
         for tx in unspend_txs {
             for index in 0..tx.vout.len() {

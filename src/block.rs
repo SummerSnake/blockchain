@@ -1,10 +1,11 @@
-use super::*;
+use std::time::SystemTime;
+
+use super::Result;
 use crate::transction::Transction;
 use bincode::serialize;
 use crypto::{digest::Digest, sha2::Sha256};
 use log::info;
 use serde::{Deserialize, Serialize};
-use std::time::SystemTime;
 
 const TARGET_HEXS: usize = 4;
 

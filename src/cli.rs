@@ -1,9 +1,10 @@
-use super::*;
+use std::process::exit;
+
+use super::Result;
 use crate::blockchain::*;
 use crate::transction::*;
 use clap::{Arg, Command};
 use log::info;
-use std::process::exit;
 
 pub struct Cli {}
 
