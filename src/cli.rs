@@ -3,6 +3,7 @@ use std::process::exit;
 use super::Result;
 use crate::blockchain::*;
 use crate::transction::*;
+use crate::wallets::*;
 use clap::{Arg, Command};
 use log::info;
 
@@ -21,6 +22,7 @@ impl Cli {
             .author("SummerSnake")
             .about("A simple blockchain for learning.")
             .subcommand(Command::new("print_chain").about("Print all the chain blocks."))
+            .subcommand(Command::new("create_wallets").about("Create a wallet."))
             .subcommand(
                 Command::new("get_balance")
                     .about("Get balance in the blockchain.")
@@ -49,6 +51,15 @@ impl Cli {
             }
         }
 
+        // 创建钱包
+        if let Some(_) = matches.subcommand_matches("create_wallets") {
+            let mut wlts = Wallets::new()?;
+            let address = wlts.create_wallet();
+            wlts.save_all()?;
+
+            println!("Create wallets success, the wallets address: {}", address);
+        }
+
         // 打印区块链
         if let Some(_) = matches.subcommand_matches("print_chain") {
             let bc = Blockchain::new()?;
@@ -61,15 +72,16 @@ impl Cli {
         // 获取余额
         if let Some(ref matches) = matches.subcommand_matches("get_balance") {
             if let Some(address) = matches.get_one::<String>("address") {
+                let address = address.as_bytes();
                 let bc = Blockchain::new()?;
-                let utxos = bc.find_utxo(&address);
+                let utxos = bc.find_utxo(address);
 
                 let mut balance = 0;
                 for out in utxos {
                     balance += out.value;
                 }
 
-                println!("Balance of '{}': {}\n", address, balance);
+                println!("Balance: {}\n", balance);
             }
         }
 
@@ -102,6 +114,7 @@ impl Cli {
             let mut bc = Blockchain::new()?;
             let tx = Transction::new_utxo(from, to, amount, &bc)?;
             bc.mine_block(vec![tx])?;
+
             println!("Send success");
         }
 

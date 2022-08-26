@@ -92,7 +92,7 @@ impl Wallets {
 
         for (address, wallet) in &self.wallets {
             let data = serialize(&wallet)?;
-            db.insert(address, data);
+            db.insert(address, data)?;
         }
 
         db.flush()?;

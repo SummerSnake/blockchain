@@ -61,8 +61,8 @@ impl Blockchain {
             tip: genesis_block.get_hash(),
             db,
         };
-
         bc.db.flush()?;
+
         Ok(bc)
     }
 
@@ -76,6 +76,7 @@ impl Blockchain {
             .insert(new_block.get_hash(), serialize(&new_block)?)?;
         self.db.insert("LAST", new_block.get_hash().as_bytes())?;
         self.db.flush()?;
+
         self.tip = new_block.get_hash();
 
         Ok(())
@@ -88,13 +89,13 @@ impl Blockchain {
         }
     }
 
-    pub fn find_utxo(&self, address: &str) -> Vec<TXOutput> {
+    pub fn find_utxo(&self, pub_key_hash: &[u8]) -> Vec<TXOutput> {
         let mut utxos = Vec::<TXOutput>::new();
-        let unspend_txs = self.find_unspend_transactions(address);
+        let unspend_txs = self.find_unspent_transactions(pub_key_hash);
 
         for tx in unspend_txs {
             for out in &tx.vout {
-                if out.can_be_unlock_with(&address) {
+                if out.is_locked_with_key(pub_key_hash) {
                     utxos.push(out.clone());
                 }
             }
@@ -110,11 +111,11 @@ impl Blockchain {
     ) -> (i32, HashMap<String, Vec<i32>>) {
         let mut unspent_outputs: HashMap<String, Vec<i32>> = HashMap::new();
         let mut accumulated = 0;
-        let unspend_txs = self.find_unspend_transactions(pub_key_hash);
+        let unspend_txs = self.find_unspent_transactions(pub_key_hash);
 
         for tx in unspend_txs {
             for index in 0..tx.vout.len() {
-                if tx.vout[index].can_be_unlock_with(address) && accumulated < amount {
+                if tx.vout[index].is_locked_with_key(pub_key_hash) && accumulated < amount {
                     match unspent_outputs.get_mut(&tx.id) {
                         Some(v) => v.push(index as i32),
                         None => {
@@ -134,7 +135,7 @@ impl Blockchain {
         (accumulated, unspent_outputs)
     }
 
-    fn find_unspend_transactions(&self, address: &str) -> Vec<Transction> {
+    fn find_unspent_transactions(&self, pub_key_hash: &[u8]) -> Vec<Transction> {
         let mut spent_txos: HashMap<String, Vec<i32>> = HashMap::new();
         let mut unspend_txs: Vec<Transction> = Vec::new();
 
@@ -147,14 +148,14 @@ impl Blockchain {
                         }
                     }
 
-                    if tx.vout[index].can_be_unlock_with(address) {
+                    if tx.vout[index].is_locked_with_key(pub_key_hash) {
                         unspend_txs.push(tx.to_owned())
                     }
                 }
 
                 if !tx.is_coinbase() {
                     for i in &tx.vin {
-                        if i.can_unlock_output_with(address) {
+                        if i.uses_key(pub_key_hash) {
                             match spent_txos.get_mut(&i.txid) {
                                 Some(v) => {
                                     v.push(i.vout);

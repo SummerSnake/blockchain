@@ -41,8 +41,8 @@ impl TXOutput {
             value,
             pub_key_hash: Vec::new(),
         };
+        txo.lock(&address)?;
 
-        txo.lock(&address);
         Ok(txo)
     }
 
@@ -82,7 +82,6 @@ impl Transction {
         hash_pub_key(&mut pub_key_hash);
 
         let acc_v = bc.find_spendable_outputs(&pub_key_hash, amount);
-
         if acc_v.0 < amount {
             error!("Not Enough balance");
 
@@ -98,31 +97,23 @@ impl Transction {
                 let input = TXInput {
                     txid: tx.0.clone(),
                     vout: out,
-                    script_sig: String::from(from),
+                    signature: String::new(),
+                    pub_key: wallet.public_key.clone(),
                 };
 
                 vin.push(input);
             }
         }
 
-        let mut vout = vec![TXOutput {
-            value: amount,
-            script_pub_key: String::from(to),
-        }];
-
+        let mut vout = vec![TXOutput::new(amount, to.to_string())?];
         if acc_v.0 > amount {
-            vout.push(TXOutput {
-                value: acc_v.0 - amount,
-                script_pub_key: String::from(from),
-            });
+            vout.push(TXOutput::new(acc_v.0 - amount, from.to_string())?);
         }
-
         let mut tx = Transction {
             id: String::new(),
             vin,
             vout,
         };
-
         tx.set_id()?;
 
         Ok(tx)
@@ -141,14 +132,11 @@ impl Transction {
             vin: vec![TXInput {
                 txid: String::new(),
                 vout: -1,
-                script_sig: data,
+                signature: String::new(),
+                pub_key: Vec::from(data.as_bytes()),
             }],
-            vout: vec![TXOutput {
-                value: SUBSIDY,
-                script_pub_key: to,
-            }],
+            vout: vec![TXOutput::new(SUBSIDY, to)?],
         };
-
         tx.set_id()?;
 
         Ok(tx)
