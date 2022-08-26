@@ -110,3 +110,49 @@ pub fn hash_pub_key(pub_key: &mut Vec<u8>) {
     pub_key.resize(20, 0);
     hasher_02.result(pub_key);
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_create_wallet_and_hash() {
+        let w1 = Wallet::new();
+        let w2 = Wallet::new();
+        assert_ne!(w1, w2);
+        assert_ne!(w1.get_address(), w2.get_address());
+
+        let mut p2 = w2.public_key.clone();
+        hash_pub_key(&mut p2);
+        assert_eq!(p2.len(), 20);
+
+        let pub_key_hash = Address::decode(&w2.get_address()).unwrap().body;
+        assert_eq!(pub_key_hash, p2);
+    }
+
+    #[test]
+    fn test_wallets() {
+        let mut wlts = Wallets::new().unwrap();
+        let wlt_address = wlts.create_wallet();
+        let wlt1 = wlts.get_wallet(&wlt_address).unwrap().clone();
+        wlts.save_all().unwrap();
+        drop(wlts);
+
+        let wlts2 = Wallets::new().unwrap();
+        let wlt2 = wlts2.get_wallet(&wlt_address).unwrap();
+        assert_eq!(&wlt1, wlt2);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_wallets_not_exist() {
+        let mut wlts = Wallets::new().unwrap();
+        wlts.create_wallet();
+        wlts.save_all().unwrap();
+        drop(wlts);
+
+        let wlt = Wallet::new();
+        let wlts2 = Wallets::new().unwrap();
+        wlts2.get_wallet(&wlt.get_address()).unwrap();
+    }
+}
