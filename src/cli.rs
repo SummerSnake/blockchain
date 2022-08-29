@@ -2,7 +2,7 @@ use std::process::exit;
 
 use super::Result;
 use crate::blockchain::*;
-use crate::transction::*;
+use crate::transaction::*;
 use crate::wallets::*;
 use clap::{Arg, Command};
 use log::info;
@@ -112,7 +112,7 @@ impl Cli {
             };
 
             let mut bc = Blockchain::new()?;
-            let tx = Transction::new_utxo(from, to, amount, &bc)?;
+            let tx = Transaction::new_utxo(from, to, amount, &bc)?;
             bc.mine_block(vec![tx])?;
 
             println!("Send success");

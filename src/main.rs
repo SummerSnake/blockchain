@@ -1,7 +1,8 @@
 mod block;
 mod blockchain;
 mod cli;
-mod transction;
+mod transaction;
+mod utxo_set;
 mod wallets;
 
 pub type Result<T> = std::result::Result<T, failure::Error>;

@@ -1,7 +1,7 @@
 use std::time::SystemTime;
 
 use super::Result;
-use crate::transction::Transction;
+use crate::transaction::Transaction;
 use bincode::serialize;
 use crypto::{digest::Digest, sha2::Sha256};
 use log::info;
@@ -12,7 +12,7 @@ const TARGET_HEXS: usize = 4;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Block {
     timestamp: u128,
-    transactions: Vec<Transction>,
+    transactions: Vec<Transaction>,
     prev_block_hash: String,
     hash: String,
     nonce: i32,
@@ -22,7 +22,7 @@ impl Block {
     /**
      * @desc 新建区块
      */
-    pub fn new(transactions: Vec<Transction>, prev_block_hash: String) -> Result<Block> {
+    pub fn new(transactions: Vec<Transaction>, prev_block_hash: String) -> Result<Block> {
         let timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)?
             .as_millis();
@@ -56,7 +56,7 @@ impl Block {
     /**
      * @desc 获取交易记录
      */
-    pub fn get_transaction(&self) -> &Vec<Transction> {
+    pub fn get_transaction(&self) -> &Vec<Transaction> {
         &self.transactions
     }
 

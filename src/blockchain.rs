@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::Result;
 use crate::block::*;
-use crate::transction::*;
+use crate::transaction::*;
 use bincode::{deserialize, serialize};
 use log::{debug, info};
 use sled;
@@ -52,7 +52,7 @@ impl Blockchain {
 
         debug!("Creating new block database...");
 
-        let cb = Transction::new_coinbase(address, String::from(GENESIS_COINBASE_DATA))?;
+        let cb = Transaction::new_coinbase(address, String::from(GENESIS_COINBASE_DATA))?;
         let genesis_block = Block::new(vec![cb], String::new())?;
         db.insert(genesis_block.get_hash(), serialize(&genesis_block)?)?;
         db.insert("LAST", genesis_block.get_hash().as_bytes())?;
@@ -66,7 +66,7 @@ impl Blockchain {
         Ok(bc)
     }
 
-    pub fn mine_block(&mut self, transactions: Vec<Transction>) -> Result<()> {
+    pub fn mine_block(&mut self, transactions: Vec<Transaction>) -> Result<()> {
         info!("A new block.");
 
         let last_hash = self.db.get("LAST")?.unwrap();
@@ -135,9 +135,9 @@ impl Blockchain {
         (accumulated, unspent_outputs)
     }
 
-    fn find_unspent_transactions(&self, pub_key_hash: &[u8]) -> Vec<Transction> {
+    fn find_unspent_transactions(&self, pub_key_hash: &[u8]) -> Vec<Transaction> {
         let mut spent_txos: HashMap<String, Vec<i32>> = HashMap::new();
-        let mut unspend_txs: Vec<Transction> = Vec::new();
+        let mut unspend_txs: Vec<Transaction> = Vec::new();
 
         for block in self.iter() {
             for tx in block.get_transaction() {
@@ -171,6 +171,12 @@ impl Blockchain {
         }
 
         unspend_txs
+    }
+
+    pub fn sign_transaction(&self, tx: &mut Transaction, private_key: &[u8]) -> Result<()> {
+        let prev_txs = self.get_prev_txs(tx)?;
+        tx.sign(private_key, prev_txs)?;
+        Ok(())
     }
 }
 

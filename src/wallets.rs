@@ -15,7 +15,7 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let mut key: [u8; 64] = [0; 64];
         OsRng.fill_bytes(&mut key);
         let (secret_key, public_key) = ed25519::keypair(&key);
