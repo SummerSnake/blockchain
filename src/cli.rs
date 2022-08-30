@@ -3,7 +3,9 @@ use std::process::exit;
 use super::Result;
 use crate::blockchain::*;
 use crate::transaction::*;
+use crate::utxo_set::*;
 use crate::wallets::*;
+use bitcoincash_addr::Address;
 use clap::{Arg, Command};
 use log::info;
 
@@ -23,6 +25,8 @@ impl Cli {
             .about("A simple blockchain for learning.")
             .subcommand(Command::new("print_chain").about("Print all the chain blocks."))
             .subcommand(Command::new("create_wallets").about("Create a wallet."))
+            .subcommand(Command::new("list_addresses").about("List all addresses."))
+            .subcommand(Command::new("reindex").about("Reindex UTXO."))
             .subcommand(
                 Command::new("get_balance")
                     .about("Get balance in the blockchain.")
@@ -46,7 +50,11 @@ impl Cli {
         if let Some(ref matches) = matches.subcommand_matches("create_blockchain") {
             if let Some(address) = matches.get_one::<String>("address") {
                 let address = String::from(address);
-                Blockchain::create_blockchain(address.clone())?;
+                let bc = Blockchain::create_blockchain(address.clone())?;
+
+                let utxo_set = UTXOSet { blockchain: bc };
+                utxo_set.reindex()?;
+
                 println!("Create blockchain success.");
             }
         }
@@ -69,15 +77,38 @@ impl Cli {
             }
         }
 
+        // 打印所有钱包地址
+        if let Some(_) = matches.subcommand_matches("list_addresses") {
+            let wlt = Wallets::new()?;
+            let addresses = wlt.get_all_addresses();
+
+            println!("addresses: ");
+            for addr in addresses {
+                println!("{}", addr);
+            }
+        }
+
+        // 重新构建 UTXO 集
+        if let Some(_) = matches.subcommand_matches("reindex") {
+            let bc = Blockchain::new()?;
+            let usxo_set = UTXOSet { blockchain: bc };
+            usxo_set.reindex();
+
+            let count = usxo_set.count_transactions()?;
+
+            println!("Done! There are {} transactions in the UTXO set.", count);
+        }
+
         // 获取余额
         if let Some(ref matches) = matches.subcommand_matches("get_balance") {
             if let Some(address) = matches.get_one::<String>("address") {
-                let address = address.as_bytes();
+                let pub_key_hash = Address::decode(address).unwrap().body;
                 let bc = Blockchain::new()?;
-                let utxos = bc.find_utxo(address);
+                let utxo_set = UTXOSet { blockchain: bc };
+                let utxos = utxo_set.find_utxos(&pub_key_hash)?;
 
                 let mut balance = 0;
-                for out in utxos {
+                for out in utxos.outputs {
                     balance += out.value;
                 }
 
@@ -111,10 +142,13 @@ impl Cli {
                 exit(1)
             };
 
-            let mut bc = Blockchain::new()?;
-            let tx = Transaction::new_utxo(from, to, amount, &bc)?;
-            bc.mine_block(vec![tx])?;
+            let bc = Blockchain::new()?;
+            let mut utxo_set = UTXOSet { blockchain: bc };
+            let tx = Transaction::new_utxo(from, to, amount, &utxo_set)?;
+            let cbtx = Transaction::new_coinbase(from.to_string(), String::from("reward!"))?;
+            let new_block = utxo_set.blockchain.mine_block(vec![cbtx, tx])?;
 
+            utxo_set.update(&new_block);
             println!("Send success");
         }
 

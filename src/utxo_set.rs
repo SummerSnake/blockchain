@@ -114,4 +114,20 @@ impl UTXOSet {
 
         Ok(())
     }
+
+    /**
+     * @desc 重建数据库
+     */
+    pub fn reindex(&self) -> Result<()> {
+        std::fs::remove_dir_all("data/utxos")?;
+        let db = sled::open("data/utxos")?;
+
+        let utxos = self.blockchain.find_utxo();
+
+        for (txid, outs) in utxos {
+            db.insert(txid.as_bytes(), serialize(&outs)?)?;
+        }
+
+        Ok(())
+    }
 }

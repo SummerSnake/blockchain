@@ -61,6 +61,8 @@ impl Wallets {
             wlts.wallets.insert(address, wallet);
         }
 
+        drop(db);
+
         Ok(wlts)
     }
 
@@ -77,6 +79,7 @@ impl Wallets {
         self.wallets.get(address)
     }
 
+    // 获取所有钱包地址
     pub fn get_all_addresses(&self) -> Vec<String> {
         let mut addresses = Vec::<String>::new();
 
@@ -96,6 +99,8 @@ impl Wallets {
         }
 
         db.flush()?;
+        drop(db);
+
         Ok(())
     }
 }
@@ -136,7 +141,6 @@ mod test {
         let wlt_address = wlts.create_wallet();
         let wlt1 = wlts.get_wallet(&wlt_address).unwrap().clone();
         wlts.save_all().unwrap();
-        drop(wlts);
 
         let wlts2 = Wallets::new().unwrap();
         let wlt2 = wlts2.get_wallet(&wlt_address).unwrap();
@@ -146,13 +150,20 @@ mod test {
     #[test]
     #[should_panic]
     fn test_wallets_not_exist() {
-        let mut wlts = Wallets::new().unwrap();
-        wlts.create_wallet();
-        wlts.save_all().unwrap();
-        drop(wlts);
-
         let wlt = Wallet::new();
         let wlts2 = Wallets::new().unwrap();
         wlts2.get_wallet(&wlt.get_address()).unwrap();
+    }
+
+    #[test]
+    fn test_signature() {
+        let w = Wallet::new();
+        let signature = ed25519::signature("test".as_bytes(), &w.secret_key);
+
+        assert!(ed25519::verify(
+            "test".as_bytes(),
+            &w.public_key,
+            &signature
+        ))
     }
 }

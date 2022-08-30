@@ -107,6 +107,7 @@ dependencies = [
  "env_logger",
  "failure",
  "log",
+ "merkle-cbt",
  "rand 0.8.5",
  "rand_core 0.6.3",
  "rust-crypto",
@@ -390,6 +391,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "merkle-cbt"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "171d2f700835121c3b04ccf0880882987a050fd5c7ae88148abf537d33dd3a56"
+dependencies = [
+ "cfg-if",
 ]
 
 [[package]]

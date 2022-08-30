@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use super::Result;
-use crate::blockchain::*;
 use crate::utxo_set::UTXOSet;
 use crate::wallets::*;
 use bincode::serialize;
@@ -264,5 +263,30 @@ impl Transaction {
             vin,
             vout,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_signature() {
+        let mut ws = Wallets::new().unwrap();
+        let wlt_address = ws.create_wallet();
+        let wlt = ws.get_wallet(&wlt_address).unwrap().clone();
+        ws.save_all().unwrap();
+        drop(ws);
+
+        let data = String::from("test");
+        let tx = Transaction::new_coinbase(wlt_address, data).unwrap();
+        assert!(tx.is_coinbase());
+
+        let signature = ed25519::signature(tx.id.as_bytes(), &wlt.secret_key);
+        assert!(ed25519::verify(
+            tx.id.as_bytes(),
+            &wlt.public_key,
+            &signature
+        ));
     }
 }
