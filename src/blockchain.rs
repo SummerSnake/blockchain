@@ -29,18 +29,20 @@ impl Blockchain {
         info!("Open blockchain...");
 
         let db = sled::open("data/blocks")?;
-        let hash = db
-            .get("LAST")?
-            .expect("Must create a new block database first.");
+        let hash = match db.get("LAST")? {
+            Some(last) => last.to_vec(),
+            None => Vec::new(),
+        };
 
         info!("Found block database.");
 
-        let last_hash = String::from_utf8(hash.to_vec())?;
+        let last_hash = if hash.is_empty() {
+            String::new()
+        } else {
+            String::from_utf8(hash.to_vec())?
+        };
 
-        Ok(Blockchain {
-            tip: last_hash.clone(),
-            db,
-        })
+        Ok(Blockchain { tip: last_hash, db })
     }
 
     /**
@@ -49,13 +51,13 @@ impl Blockchain {
     pub fn create_blockchain(address: String) -> Result<Blockchain> {
         info!("Creating new blockchain.");
 
-        std::fs::remove_dir_all("data/blocks")?;
+        std::fs::remove_dir_all("data/blocks").ok();
         let db = sled::open("data/blocks")?;
 
         debug!("Creating new block database...");
 
         let cbtx = Transaction::new_coinbase(address, String::from(GENESIS_COINBASE_DATA))?;
-        let genesis_block = Block::new(vec![cbtx], String::new())?;
+        let genesis_block = Block::new(vec![cbtx], String::new(), 0).unwrap();
         db.insert(genesis_block.get_hash(), serialize(&genesis_block)?)?;
         db.insert("LAST", genesis_block.get_hash().as_bytes())?;
 
@@ -71,17 +73,21 @@ impl Blockchain {
     /**
      * @desc 使用提供的交易挖掘新块
      */
-    pub fn mine_block(&mut self, mut transactions: Vec<Transaction>) -> Result<Block> {
+    pub fn mine_block(&mut self, transactions: Vec<Transaction>) -> Result<Block> {
         info!("A new block.");
 
-        for tx in &mut transactions {
+        for tx in &transactions {
             if !self.verify_transaction(tx)? {
                 return Err(format_err!("ERROR: Invalid transaction."));
             }
         }
 
         let last_hash = self.db.get("LAST")?.unwrap();
-        let new_block = Block::new(transactions, String::from_utf8(last_hash.to_vec())?)?;
+        let new_block = Block::new(
+            transactions,
+            String::from_utf8(last_hash.to_vec())?,
+            self.get_best_height()? + 1,
+        )?;
 
         self.db
             .insert(new_block.get_hash(), serialize(&new_block)?)?;
@@ -100,7 +106,9 @@ impl Blockchain {
         }
     }
 
-    // 获取所有未花费交易输出
+    /**
+     * @desc 获取所有未花费交易输出
+     */
     pub fn find_utxo(&self) -> HashMap<String, TXOutputs> {
         let mut utxos: HashMap<String, TXOutputs> = HashMap::new();
         let mut spend_txos: HashMap<String, Vec<i32>> = HashMap::new();
@@ -147,7 +155,9 @@ impl Blockchain {
         utxos
     }
 
-    // 通过 id 获取交易
+    /**
+     * @desc 通过 id 获取交易
+     */
     pub fn find_transaction(&self, id: &str) -> Result<Transaction> {
         for b in self.iter() {
             for tx in b.get_transaction() {
@@ -160,8 +170,10 @@ impl Blockchain {
         Err(format_err!("Transaction is not found."))
     }
 
-    // 验证交易签名
-    pub fn verify_transaction(&self, tx: &mut Transaction) -> Result<bool> {
+    /**
+     * @desc 验证交易签名
+     */
+    pub fn verify_transaction(&self, tx: &Transaction) -> Result<bool> {
         if tx.is_coinbase() {
             return Ok(true);
         }
@@ -170,14 +182,19 @@ impl Blockchain {
         tx.verify(prev_txs)
     }
 
-    // 对交易的输入进行签名
+    /**
+     * @desc 对交易的输入进行签名
+     */
     pub fn sign_transaction(&self, tx: &mut Transaction, private_key: &[u8]) -> Result<()> {
         let prev_txs = self.get_prev_txs(tx)?;
         tx.sign(private_key, prev_txs)?;
+
         Ok(())
     }
 
-    // 获取前一笔交易
+    /**
+     * @desc 获取前一笔交易
+     */
     fn get_prev_txs(&self, tx: &Transaction) -> Result<HashMap<String, Transaction>> {
         let mut prev_txs = HashMap::new();
 
@@ -187,6 +204,64 @@ impl Blockchain {
         }
 
         Ok(prev_txs)
+    }
+
+    /**
+     * @desc 添加区块
+     */
+    pub fn add_block(&mut self, block: Block) -> Result<()> {
+        let data = serialize(&block)?;
+        if let Some(_) = self.db.get(block.get_hash())? {
+            return Ok(());
+        }
+        self.db.insert(block.get_hash(), data)?;
+
+        let last_height = self.get_best_height()?;
+        if block.get_height() > last_height {
+            self.db.insert("LAST", block.get_hash().as_bytes())?;
+            self.tip = block.get_hash();
+            self.db.flush()?;
+        }
+
+        Ok(())
+    }
+
+    /**
+     * @desc 通过 hash 获取区块
+     */
+    pub fn get_block(&self, block_hash: &str) -> Result<Block> {
+        let data = self.db.get(block_hash)?.unwrap();
+        let block = deserialize(&data.to_vec())?;
+
+        Ok(block)
+    }
+
+    /**
+     * @desc 获取最后一个区块的高度
+     */
+    pub fn get_best_height(&self) -> Result<i32> {
+        let last_hash = if let Some(height) = self.db.get("LAST")? {
+            height
+        } else {
+            return Ok(-1);
+        };
+
+        let last_data = self.db.get(last_hash)?.unwrap();
+        let last_block: Block = deserialize(&last_data.to_vec())?;
+
+        Ok(last_block.get_height())
+    }
+
+    /**
+     * @desc 获取所有区块的哈希
+     */
+    pub fn get_block_hash_list(&self) -> Vec<String> {
+        let mut list = Vec::new();
+        for b in self.iter() {
+            list.push(b.get_hash());
+        }
+
+        list
     }
 }
 

@@ -119,7 +119,7 @@ impl UTXOSet {
      * @desc 重建数据库
      */
     pub fn reindex(&self) -> Result<()> {
-        std::fs::remove_dir_all("data/utxos")?;
+        std::fs::remove_dir_all("data/utxos");
         let db = sled::open("data/utxos")?;
 
         let utxos = self.blockchain.find_utxo();

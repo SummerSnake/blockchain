@@ -17,13 +17,18 @@ pub struct Block {
     prev_block_hash: String,
     hash: String,
     nonce: i32,
+    height: i32,
 }
 
 impl Block {
     /**
      * @desc 新建区块
      */
-    pub fn new(transactions: Vec<Transaction>, prev_block_hash: String) -> Result<Block> {
+    pub fn new(
+        transactions: Vec<Transaction>,
+        prev_block_hash: String,
+        height: i32,
+    ) -> Result<Block> {
         let timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)?
             .as_millis();
@@ -34,6 +39,7 @@ impl Block {
             prev_block_hash,
             hash: String::new(),
             nonce: 0,
+            height,
         };
 
         block.run_proof_of_work()?;
@@ -62,10 +68,17 @@ impl Block {
     }
 
     /**
+     * @desc 获取区块高度(当前区块在区块链中和创世区块之间的块数)
+     */
+    pub fn get_height(&self) -> i32 {
+        self.height
+    }
+
+    /**
      * @desc 执行算法
      */
     fn run_proof_of_work(&mut self) -> Result<()> {
-        info!("Mining the block containing \"{:#?}\"\n", self.transactions);
+        info!("Mining the block.");
 
         while !self.validate()? {
             self.nonce += 1;

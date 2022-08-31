@@ -92,7 +92,7 @@ impl Cli {
         if let Some(_) = matches.subcommand_matches("reindex") {
             let bc = Blockchain::new()?;
             let usxo_set = UTXOSet { blockchain: bc };
-            usxo_set.reindex();
+            usxo_set.reindex()?;
 
             let count = usxo_set.count_transactions()?;
 
@@ -148,7 +148,7 @@ impl Cli {
             let cbtx = Transaction::new_coinbase(from.to_string(), String::from("reward!"))?;
             let new_block = utxo_set.blockchain.mine_block(vec![cbtx, tx])?;
 
-            utxo_set.update(&new_block);
+            utxo_set.update(&new_block)?;
             println!("Send success");
         }
 

@@ -21,15 +21,6 @@ pub struct TXInput {
     pub pub_key: Vec<u8>,
 }
 
-impl TXInput {
-    pub fn uses_key(&self, pub_key_hash: &[u8]) -> bool {
-        let mut pubkey_hash = self.pub_key.clone();
-        hash_pub_key(&mut pubkey_hash);
-
-        pubkey_hash == pub_key_hash
-    }
-}
-
 // 输出
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TXOutput {
@@ -142,7 +133,7 @@ impl Transaction {
 
         let wallets = Wallets::new()?;
         if let None = wallets.get_wallet(&to) {
-            return Err(format_err!("coinbase wallet not found"));
+            return Err(format_err!("Coinbase wallet not found."));
         };
 
         let mut tx = Transaction {
@@ -164,7 +155,7 @@ impl Transaction {
         self.vin.len() == 1 && self.vin[0].txid.is_empty() && self.vin[0].vout == -1
     }
 
-    pub fn verify(&mut self, prev_txs: HashMap<String, Transaction>) -> Result<bool> {
+    pub fn verify(&self, prev_txs: HashMap<String, Transaction>) -> Result<bool> {
         if self.is_coinbase() {
             return Ok(true);
         }
