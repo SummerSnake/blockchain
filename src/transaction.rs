@@ -8,6 +8,7 @@ use bitcoincash_addr::Address;
 use crypto::{digest::Digest, ed25519, sha2::Sha256};
 use failure::format_err;
 use log::{debug, error, info};
+use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 
 const SUBSIDY: i32 = 10;
@@ -67,27 +68,22 @@ pub struct Transaction {
 
 impl Transaction {
     // 生成一笔新的交易
-    pub fn new_utxo(from: &str, to: &str, amount: i32, utxo: &UTXOSet) -> Result<Transaction> {
-        info!("New UTXO Transaction from: {} to: {}.", from, to);
-
-        let wallets = Wallets::new()?;
-        let wallet = match wallets.get_wallet(from) {
-            Some(w) => w,
-            None => return Err(format_err!("Wallet not found.")),
-        };
-        if let None = wallets.get_wallet(to) {
-            return Err(format_err!("To wallet not found."));
-        }
+    pub fn new_utxo(wallet: &Wallet, to: &str, amount: i32, utxo: &UTXOSet) -> Result<Transaction> {
+        info!(
+            "New UTXO Transaction from: {} to: {}.",
+            wallet.get_address(),
+            to
+        );
 
         let mut pub_key_hash = wallet.public_key.clone();
         hash_pub_key(&mut pub_key_hash);
 
         let acc_v = utxo.find_spendable_outputs(&pub_key_hash, amount)?;
         if acc_v.0 < amount {
-            error!("Not Enough balance");
+            error!("Not Enough balance.");
 
             return Err(format_err!(
-                "Not Enough balance: current balance {}",
+                "Not Enough balance: current balance {}.",
                 acc_v.0
             ));
         }
@@ -108,7 +104,7 @@ impl Transaction {
 
         let mut vout = vec![TXOutput::new(amount, to.to_string())?];
         if acc_v.0 > amount {
-            vout.push(TXOutput::new(acc_v.0 - amount, from.to_string())?);
+            vout.push(TXOutput::new(acc_v.0 - amount, wallet.get_address())?);
         }
 
         let mut tx = Transaction {
@@ -127,14 +123,13 @@ impl Transaction {
     pub fn new_coinbase(to: String, mut data: String) -> Result<Transaction> {
         info!("New coinbase Transaction to: {}", to);
 
+        let mut key: [u8; 32] = [0; 32];
         if data.is_empty() {
+            OsRng.fill_bytes(&mut key);
             data = format!("Reward to '{}'", to);
         }
-
-        let wallets = Wallets::new()?;
-        if let None = wallets.get_wallet(&to) {
-            return Err(format_err!("Coinbase wallet not found."));
-        };
+        let mut pub_key = Vec::from(data.as_bytes());
+        pub_key.append(&mut Vec::from(key));
 
         let mut tx = Transaction {
             id: String::new(),
@@ -142,7 +137,7 @@ impl Transaction {
                 txid: String::new(),
                 vout: -1,
                 signature: Vec::new(),
-                pub_key: Vec::from(data.as_bytes()),
+                pub_key,
             }],
             vout: vec![TXOutput::new(SUBSIDY, to)?],
         };
