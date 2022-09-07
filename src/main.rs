@@ -1,6 +1,7 @@
 mod block;
 mod blockchain;
 mod cli;
+mod server;
 mod transaction;
 mod utxo_set;
 mod wallets;
