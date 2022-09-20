@@ -1,10 +1,7 @@
 use std::process::exit;
 
 use super::Result;
-use crate::blockchain::*;
-use crate::transaction::*;
-use crate::utxo_set::*;
-use crate::wallets::*;
+use crate::{blockchain::*, server::*, transaction::*, utxo_set::*, wallets::*};
 use bitcoincash_addr::Address;
 use clap::{Arg, Command};
 use log::info;
@@ -44,13 +41,24 @@ impl Cli {
                     .arg(Arg::new("to"))
                     .arg(Arg::new("amount")),
             )
+            .subcommand(
+                Command::new("start_node")
+                    .about("Start the node server.")
+                    .arg(Arg::new("port").takes_value(true)),
+            )
+            .subcommand(
+                Command::new("start_miner")
+                    .about("Start the miner server.")
+                    .arg(Arg::new("port"))
+                    .arg(Arg::new("address")),
+            )
             .get_matches();
 
         // 创建区块链
         if let Some(ref matches) = matches.subcommand_matches("create_blockchain") {
             if let Some(address) = matches.get_one::<String>("address") {
                 let address = String::from(address);
-                let bc = Blockchain::create_blockchain(address.clone())?;
+                let bc = Blockchain::create_blockchain(address)?;
 
                 let utxo_set = UTXOSet { blockchain: bc };
                 utxo_set.reindex()?;
@@ -91,10 +99,10 @@ impl Cli {
         // 重新构建 UTXO 集
         if let Some(_) = matches.subcommand_matches("reindex") {
             let bc = Blockchain::new()?;
-            let usxo_set = UTXOSet { blockchain: bc };
-            usxo_set.reindex()?;
+            let utxo_set = UTXOSet { blockchain: bc };
+            utxo_set.reindex()?;
 
-            let count = usxo_set.count_transactions()?;
+            let count = utxo_set.count_transactions()?;
 
             println!("Done! There are {} transactions in the UTXO set.", count);
         }
@@ -144,12 +152,54 @@ impl Cli {
 
             let bc = Blockchain::new()?;
             let mut utxo_set = UTXOSet { blockchain: bc };
-            let tx = Transaction::new_utxo(from, to, amount, &utxo_set)?;
-            let cbtx = Transaction::new_coinbase(from.to_string(), String::from("reward!"))?;
-            let new_block = utxo_set.blockchain.mine_block(vec![cbtx, tx])?;
+            let wlts = Wallets::new()?;
+            let wlt = wlts.get_wallet(from).unwrap();
+            let tx = Transaction::new_utxo(wlt, to, amount, &utxo_set)?;
 
-            utxo_set.update(&new_block)?;
+            if matches.is_present("mine") {
+                let cbtx = Transaction::new_coinbase(from.to_string(), String::from("reward!"))?;
+                let new_block = utxo_set.blockchain.mine_block(vec![cbtx, tx])?;
+
+                utxo_set.update(&new_block)?;
+            } else {
+                Server::send_transaction(&tx, utxo_set)?;
+            }
             println!("Send success");
+        }
+
+        // 开始节点
+        if let Some(ref matches) = matches.subcommand_matches("start_node") {
+            if let Some(port) = matches.get_one::<String>("port") {
+                println!("Start node...");
+
+                let bc = Blockchain::new()?;
+                let utxo_set = UTXOSet { blockchain: bc };
+                let server = Server::new(port, "", utxo_set)?;
+                server.start_server()?;
+            }
+        }
+
+        // 矿工节点
+        if let Some(ref matches) = matches.subcommand_matches("start_miner") {
+            let address = if let Some(address) = matches.get_one::<String>("address") {
+                address
+            } else {
+                println!("From not supply!: usage\n{}", matches.args_present());
+                exit(1)
+            };
+
+            let port = if let Some(port) = matches.get_one::<String>("port") {
+                port
+            } else {
+                println!("From not supply!: usage\n{}", matches.args_present());
+                exit(1)
+            };
+
+            println!("Start miner node...");
+            let bc = Blockchain::new()?;
+            let utxo_set = UTXOSet { blockchain: bc };
+            let server = Server::new(port, address, utxo_set)?;
+            server.start_server()?;
         }
 
         Ok(())

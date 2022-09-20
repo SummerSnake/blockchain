@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use super::Result;
-use crate::utxo_set::UTXOSet;
-use crate::wallets::*;
+use crate::{utxo_set::*, wallets::*};
 use bincode::serialize;
 use bitcoincash_addr::Address;
 use crypto::{digest::Digest, ed25519, sha2::Sha256};

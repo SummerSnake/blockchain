@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use super::Result;
-use crate::block::*;
-use crate::transaction::*;
+use crate::{block::*, transaction::*};
 use bincode::{deserialize, serialize};
 use failure::format_err;
 use log::{debug, info};

@@ -119,6 +119,27 @@ impl Server {
             }
         });
 
+        let listener = TcpListener::bind(&self.node_address).unwrap();
+        info!("Server listen...");
+
+        for stream in listener.incoming() {
+            let stream = stream?;
+            let server_01 = Server {
+                node_address: self.node_address.clone(),
+                mining_address: self.mining_address.clone(),
+                inner: Arc::clone(&self.inner),
+            };
+
+            thread::spawn(move || server_01.handle_connection(stream));
+        }
+
+        Ok(())
+    }
+
+    pub fn send_transaction(tx: &Transaction, utxoset: UTXOSet) -> Result<()> {
+        let server = Server::new("7000", "", utxoset)?;
+        server.send_tx(KNOWN_NODE_01, tx)?;
+
         Ok(())
     }
 
@@ -149,7 +170,19 @@ impl Server {
 
         stream.write(data)?;
         info!("Data send successfully");
+
         Ok(())
+    }
+
+    pub fn send_tx(&self, addr: &str, tx: &Transaction) -> Result<()> {
+        info!("Send tx to: {} txid: {}", addr, &tx.id);
+
+        let data = TxMsg {
+            addr_from: self.node_address.clone(),
+            transaction: tx.clone(),
+        };
+        let data = serialize(&(cmd_to_bytes("tx"), data))?;
+        self.send_data(addr, &data)
     }
 
     fn send_get_blocks(&self, addr: &str) -> Result<()> {
@@ -180,6 +213,25 @@ impl Server {
         };
         let data = serialize(&(cmd_to_bytes("version"), data))?;
         self.send_data(addr, &data)
+    }
+
+    fn handle_connection(&self, mut stream: TcpStream) -> Result<()> {
+        let mut buffer = Vec::new();
+        let count = stream.read_to_end(&mut buffer)?;
+        info!("Accept request: length {}", count);
+
+        let cmd = bytes_to_cmd(&buffer)?;
+        match cmd {
+            Message::Addr(data) => self.handle_addr(data)?,
+            Message::Block(data) => self.handle_block(data)?,
+            Message::Inv(data) => self.handle_inv(data)?,
+            Message::GetBlock(data) => self.handle_get_blocks(data)?,
+            Message::GetData(data) => self.handle_get_data(data)?,
+            Message::Tx(data) => self.handle_tx(data)?,
+            Message::Version(data) => self.handle_version(data)?,
+        }
+
+        Ok(())
     }
 }
 

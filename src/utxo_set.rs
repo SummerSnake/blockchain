@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::Result;
-use crate::{block::Block, blockchain::Blockchain, transaction::TXOutputs};
+use crate::{block::*, blockchain::*, transaction::*};
 use bincode::{deserialize, serialize};
 use sled;
 
