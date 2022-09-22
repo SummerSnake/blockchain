@@ -254,8 +254,9 @@ impl Blockchain {
     /**
      * @desc 获取所有区块的哈希
      */
-    pub fn get_block_hash_list(&self) -> Vec<String> {
+    pub fn get_block_hashes(&self) -> Vec<String> {
         let mut list = Vec::new();
+
         for b in self.iter() {
             list.push(b.get_hash());
         }

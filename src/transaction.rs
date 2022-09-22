@@ -44,6 +44,8 @@ impl TXOutput {
     }
 
     fn lock(&mut self, address: &str) -> Result<()> {
+        println!("Please input base58 address.");
+
         let pub_key_hash = Address::decode(address).unwrap().body;
         debug!("lock: {}", address);
         self.pub_key_hash = pub_key_hash;

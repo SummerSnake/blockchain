@@ -59,7 +59,6 @@ impl Cli {
             if let Some(address) = matches.get_one::<String>("address") {
                 let address = String::from(address);
                 let bc = Blockchain::create_blockchain(address)?;
-
                 let utxo_set = UTXOSet { blockchain: bc };
                 utxo_set.reindex()?;
 

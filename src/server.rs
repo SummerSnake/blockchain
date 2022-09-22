@@ -11,7 +11,7 @@ use super::Result;
 use crate::{block::Block, transaction::Transaction, utxo_set::UTXOSet};
 use bincode::{deserialize, serialize};
 use failure::format_err;
-use log::info;
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 
 // 消息
@@ -87,7 +87,7 @@ impl Server {
         node_set.insert(String::from(KNOWN_NODE_01));
 
         Ok(Server {
-            node_address: String::from("localhost") + port,
+            node_address: String::from("localhost:") + port,
             mining_address: miner_address.to_string(),
             inner: Arc::new(Mutex::new(ServerInner {
                 known_nodes: node_set,
@@ -152,6 +152,10 @@ impl Server {
         self.inner.lock().unwrap().known_nodes.clone()
     }
 
+    fn node_is_known(&self, addr: &str) -> bool {
+        self.inner.lock().unwrap().known_nodes.get(addr).is_some()
+    }
+
     fn add_nodes(&self, addr: &str) {
         self.inner
             .lock()
@@ -206,6 +210,22 @@ impl Server {
         self.send_data(addr, &data)
     }
 
+    fn send_inv(&self, addr: &str, kind: &str, items: Vec<String>) -> Result<()> {
+        info!(
+            "Send inv message to: {} kind: {} data: {:?}",
+            addr, kind, items
+        );
+
+        let data = InvMsg {
+            addr_from: self.node_address.clone(),
+            kind: kind.to_string(),
+            items,
+        };
+        let data = serialize(&(cmd_to_bytes("inv"), data))?;
+
+        self.send_data(addr, &data)
+    }
+
     fn send_get_blocks(&self, addr: &str) -> Result<()> {
         info!("Send get blocks message to: {}.", addr);
 
@@ -231,8 +251,31 @@ impl Server {
         self.send_data(addr, &data)
     }
 
+    fn send_block(&self, addr: &str, b: &Block) -> Result<()> {
+        info!("Send block data to: {} block hash: {}", addr, b.get_hash());
+
+        let data = BlockMsg {
+            addr_from: self.node_address.clone(),
+            block: b.clone(),
+        };
+        let data = serialize(&(cmd_to_bytes("block"), data))?;
+        self.send_data(addr, &data)
+    }
+
+    fn send_addr(&self, addr: &str) -> Result<()> {
+        info!("Send address info to: {}.", addr);
+        let nodes = self.get_known_nodes();
+        let data = serialize(&(cmd_to_bytes("addr"), nodes))?;
+
+        self.send_data(addr, &data)
+    }
+
     fn add_block(&self, block: Block) -> Result<()> {
         self.inner.lock().unwrap().utxo.blockchain.add_block(block)
+    }
+
+    fn mine_block(&self, txs: Vec<Transaction>) -> Result<Block> {
+        self.inner.lock().unwrap().utxo.blockchain.mine_block(txs)
     }
 
     fn request_blocks(&self) -> Result<()> {
@@ -241,6 +284,24 @@ impl Server {
         }
 
         Ok(())
+    }
+
+    fn get_block_hashes(&self) -> Vec<String> {
+        self.inner
+            .lock()
+            .unwrap()
+            .utxo
+            .blockchain
+            .get_block_hashes()
+    }
+
+    fn get_block(&self, block_hash: &str) -> Result<Block> {
+        self.inner
+            .lock()
+            .unwrap()
+            .utxo
+            .blockchain
+            .get_block(block_hash)
     }
 
     fn get_in_transit(&self) -> Vec<String> {
@@ -252,6 +313,27 @@ impl Server {
             Some(tx) => Some(tx.clone()),
             None => None,
         }
+    }
+
+    fn verify_tx(&self, tx: &Transaction) -> Result<bool> {
+        self.inner
+            .lock()
+            .unwrap()
+            .utxo
+            .blockchain
+            .verify_transaction(tx)
+    }
+
+    fn get_mempool(&self) -> HashMap<String, Transaction> {
+        self.inner.lock().unwrap().mempool.clone()
+    }
+
+    fn insert_mempool(&self, tx: Transaction) {
+        self.inner.lock().unwrap().mempool.insert(tx.id.clone(), tx);
+    }
+
+    fn clear_mempool(&self) {
+        self.inner.lock().unwrap().mempool.clear()
     }
 
     fn replace_in_transit(&self, hashes: Vec<String>) {
@@ -319,6 +401,109 @@ impl Server {
                 }
                 None => self.send_get_data(&msg.addr_from, "tx", txid)?,
             }
+        }
+
+        Ok(())
+    }
+
+    fn handle_get_blocks(&self, msg: GetBlockMsg) -> Result<()> {
+        info!("Receive get blocks msg: {:#?}.", msg);
+
+        let block_hashes = self.get_block_hashes();
+        self.send_inv(&msg.addr_from, "block", block_hashes)?;
+
+        Ok(())
+    }
+
+    fn handle_get_data(&self, msg: GetDataMsg) -> Result<()> {
+        info!("Receive get data msg: {:#?}.", msg);
+
+        if msg.kind == "block" {
+            let block = self.get_block(&msg.id)?;
+            self.send_block(&msg.addr_from, &block)?;
+        }
+        if msg.kind == "tx" {
+            let tx = self.get_mempool_tx(&msg.id).unwrap();
+            self.send_tx(&msg.addr_from, &tx)?;
+        }
+
+        Ok(())
+    }
+
+    fn handle_tx(&self, msg: TxMsg) -> Result<()> {
+        info!("Receive tx msg: {} {}.", msg.addr_from, &msg.transaction.id);
+
+        self.insert_mempool(msg.transaction.clone());
+
+        let known_nodes = self.get_known_nodes();
+        if self.node_address == KNOWN_NODE_01 {
+            for node in known_nodes {
+                if node != self.node_address && node != msg.addr_from {
+                    self.send_inv(&node, "tx", vec![msg.transaction.id.clone()])?;
+                }
+            }
+        } else {
+            let mut mempool = self.get_mempool();
+
+            debug!("Current mempool: {:#?}", &mempool);
+            if mempool.len() >= 1 && !self.mining_address.is_empty() {
+                loop {
+                    let mut txs = Vec::new();
+
+                    for (_, tx) in &mempool {
+                        if self.verify_tx(tx)? {
+                            txs.push(tx.clone());
+                        }
+                    }
+
+                    if txs.is_empty() {
+                        return Ok(());
+                    }
+
+                    let cbtx =
+                        Transaction::new_coinbase(self.mining_address.clone(), String::new())?;
+                    txs.push(cbtx);
+
+                    for tx in &txs {
+                        mempool.remove(&tx.id);
+                    }
+
+                    let new_block = self.mine_block(txs)?;
+                    self.utxo_reindex()?;
+
+                    for node in self.get_known_nodes() {
+                        if node != self.node_address {
+                            self.send_inv(&node, "block", vec![new_block.get_hash()])?;
+                        }
+                    }
+
+                    if mempool.len() == 0 {
+                        break;
+                    }
+                }
+
+                self.clear_mempool();
+            }
+        }
+
+        Ok(())
+    }
+
+    fn handle_version(&self, msg: VersionMsg) -> Result<()> {
+        info!("Receive version msg: {:#?}", msg);
+
+        let my_best_height = self.get_best_height()?;
+        if my_best_height < msg.best_height {
+            self.send_get_blocks(&msg.addr_from)?;
+        }
+        if my_best_height > msg.best_height {
+            self.send_version(&msg.addr_from)?;
+        }
+
+        self.send_addr(&msg.addr_from)?;
+
+        if !self.node_is_known(&msg.addr_from) {
+            self.add_nodes(&msg.addr_from);
         }
 
         Ok(())
